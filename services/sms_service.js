@@ -7,13 +7,14 @@ app.use(express.json());
 app.post('/task/add', async (req, res) => {
     try {
         const task = req.body;
-        const connection = await amqp.connect('amqp://localhost:5672');
+        const connection = await amqp.connect('amqps://lycvucix:UjmwYJx8sdPIQ-AO05nbQYq0R2nxCGDs@puffin.rmq2.cloudamqp.com/lycvucix');
         const channel = await connection.createChannel();
     
-        const result = await  channel.assertQueue('jobs');
+        await  channel.assertQueue('smsQueue');
+        await channel.bindQueue('smsQueue', 'amq.direct', 'sms');
         
-        channel.sendToQueue('jobs', Buffer.from(JSON.stringify(task)));
-        res.send('Task added!');
+        channel.sendToQueue('smsQueue', Buffer.from(JSON.stringify(task)));
+        res.status(200).send('Task added!');
     } catch(err) {
         console.log(err);
     }
