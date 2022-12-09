@@ -2,11 +2,11 @@ const express = require('express');
 const app = express();
 const amqp = require('amqplib')
 const schedule = require('./helper')
-const PriorityQueue = require('./PriorityQueue');
+const Queue = require('./Queue');
 const db = require('./db')
 const Task = db.tasks
 
-let pq = new PriorityQueue((a, b) => a[0] - b[0]);
+let pq = new Queue((a, b) => a[0] - b[0]);
 let graph = {}
 
 consumeTasks();
@@ -32,10 +32,11 @@ async function consumeTasks() {
                     status: 'pending'
                 }
             })
-    
+            
+            let detailedDependencies = dependencies.map(dep => dep.dataValues)
             dependencies = dependencies.map(dep => dep.dataValues.id)
-    
-            const newTask = new Task({
+            
+            let newTask = new Task({
                 name: taskObj.id,
                 priority: taskObj.priority,
             })
@@ -49,10 +50,13 @@ async function consumeTasks() {
             }
     
             await handleDependencies(dependencies)
-    
-            graph[id] = {id, dependencies: dependency, priority};
-            pq.add([parseInt(priority), id]);
-    
+
+            newTask.dependencies = detailedDependencies
+
+            console.log(newTask)
+            pq.add(newTask)
+
+        
             console.log('Received task at smsQueue: ', taskObj);
             channel.ack(task);
         });
@@ -68,6 +72,7 @@ async function consumeTasks() {
                 }
             })
     
+            let detailedDependencies = dependencies.map(dep => dep.dataValues)
             dependencies = dependencies.map(dep => dep.dataValues.id)
     
             const newTask = new Task({
@@ -84,9 +89,10 @@ async function consumeTasks() {
             }
     
             await handleDependencies(dependencies)
+
+            newTask.dependencies = detailedDependencies
     
-            graph[id] = {id, dependencies: dependency, priority};
-            pq.add([parseInt(priority), id]);
+            pq.add(newTask);
     
             console.log('Received task at emailQueue: ', taskObj);
             channel.ack(task);
@@ -97,13 +103,22 @@ async function consumeTasks() {
 }
 
 app.get('/schedule', (req, res) => {
-    let visited = new Set();
-    let copy = new PriorityQueue();
-    copy.heap = JSON.parse(JSON.stringify(pq.heap));
-    copy.compare = pq.compare
+    let copy = new Queue();
 
-    const ordering = schedule(graph, visited, copy)
-    return res.status(200).json(ordering)
+    copy.heap = JSON.parse(JSON.stringify(pq.heap))
+    copy.compare = pq.compare
+    copy.graph = JSON.parse(JSON.stringify(graph))
+    copy.backEdges = JSON.parse(JSON.stringify(pq.backEdges))
+    copy. priorities = new Map()
+
+    let orderding = []
+
+    while (!copy.isEmpty()) {
+        [priority, id] = copy.poll();
+        orderding.push(`Job ${id}`)
+    }
+
+    return res.status(200).send(orderding)
 })
 
 app.post('/excecute', async (req, res) => {
