@@ -1,5 +1,3 @@
-// const ordering = schedule(graph, visited, copy)
-
 function schedule(graph, visited, copy) {
     let ordering = [];
     function dfs(node, visited) {
@@ -9,7 +7,7 @@ function schedule(graph, visited, copy) {
                 dfs(neighbor, visited);
             }
         }
-        ordering.push(node);
+        ordering.push(`Job ${node}`);
     }
 
     while (!copy.isEmpty()) {
